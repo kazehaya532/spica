@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vite/
+coverage/
+*.local
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Local design-review artifacts
+.impeccable/
