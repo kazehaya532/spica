@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+  <g fill="#efb26b">
+    <path d="M29 29C23 26 14 19 11 9c11 1 19 9 22 20l-4 0z"/>
+    <path d="M35 29c3-11 11-19 22-20-3 10-12 17-18 20h-4z" opacity=".78"/>
+    <path d="M35 35c6 3 15 10 18 20-11-1-19-9-22-20h4z"/>
+    <path d="M29 35c-3 11-11 19-22 20 3-10 12-17 18-20h4z" opacity=".78"/>
+    <circle cx="32" cy="32" r="4.5" fill="#fff4de"/>
+  </g>
+</svg>

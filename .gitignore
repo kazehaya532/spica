@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+public/engine/
+public/skydata/
+public/fonts/
+tools/
+assets/
+.impeccable/
+*.tsbuildinfo

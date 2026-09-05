@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Spica">
+  <rect width="512" height="512" rx="112" fill="#080b12"/>
+  <g fill="#efb26b" transform="translate(0 2)">
+    <path d="M232 232c-48-24-120-80-144-160 88 8 152 72 176 160h-32z"/>
+    <path d="M280 232c24-88 88-152 176-160-24 80-96 136-144 160h-32z" opacity=".78"/>
+    <path d="M280 280c48 24 120 80 144 160-88-8-152-72-176-160h32z"/>
+    <path d="M232 280c-24 88-88 152-176 160 24-80 96-136 144-160h32z" opacity=".78"/>
+    <circle cx="256" cy="256" r="34" fill="#fff4de"/>
+  </g>
+</svg>
