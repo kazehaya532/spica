@@ -61,6 +61,5 @@ Engine under AGPL-3.0. Read `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `PRODUCT.md
 before deployment.
 
 Complete corresponding Spica source is published at
-https://github.com/kazehaya532/spica. A public deployment still requires the
-per-source sky-data redistribution review documented in
-`THIRD_PARTY_NOTICES.md`.
+https://github.com/kazehaya532/spica. Per-dataset redistribution terms and
+provenance are documented in `THIRD_PARTY_NOTICES.md`.

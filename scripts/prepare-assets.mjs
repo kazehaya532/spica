@@ -32,6 +32,10 @@ for (const dataSet of [
 const cultureTarget = resolve(publicDir, 'skydata/skycultures/western')
 mkdirSync(cultureTarget, { recursive: true })
 copyFileSync(resolve(skydata, 'skycultures/western/index.json'), resolve(cultureTarget, 'index.json'))
+copyFileSync(
+  resolve(skydata, 'skycultures/western/description.md'),
+  resolve(cultureTarget, 'description.md')
+)
 
 for (const font of ['Roboto-Regular.ttf', 'Roboto-Bold.ttf']) {
   copyFileSync(

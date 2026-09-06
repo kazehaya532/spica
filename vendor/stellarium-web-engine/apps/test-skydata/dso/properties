@@ -1,6 +1,10 @@
-obs_description          = base DSO survey for Stellarium Web
-hips_release_date        = 2020-01-04T00:00Z
+obs_description          = OpenNGC deep-sky survey for Spica
+hips_release_date        = 2026-07-26T00:00Z
 hips_order_min           = 0
 type                     = dso
 hips_tile_format         = eph
-skysource_sha256         = 572d7a9010f988ecfc668d506aa623d6399049abfa5ea8a83ad533950f7d92ce
+skysource_sha256         = a9caba9f44030a56aa0ba88aea09b488c13d3ea8904efbd3bfd3847f860ca2ee
+source                   = OpenNGC NGC.csv @ commit da90466031b0372c896588b85be6016c617e205b
+source_url               = https://github.com/mattiaverga/OpenNGC
+source_license           = CC BY-SA 4.0
+generator                = scripts/make-dso.mjs

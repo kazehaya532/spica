@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/spica.svg'],
       manifest: {
-        name: 'Spica Planetarium',
+        name: 'Spica',
         short_name: 'Spica',
         description: 'Explore a location- and time-correct night sky.',
         theme_color: '#080b12',
@@ -33,7 +33,7 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.includes('/skydata/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'spica-skydata-v1',
+              cacheName: 'spica-skydata-v2',
               expiration: { maxEntries: 240, maxAgeSeconds: 60 * 60 * 24 * 90 },
               cacheableResponse: { statuses: [0, 200] }
             }
