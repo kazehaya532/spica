@@ -32,6 +32,8 @@ People use Spica outdoors at night, indoors while planning an observation, and i
 - Realistic spherical sky rendered by Stellarium Web Engine.
 - Current or user-selected time and observer location.
 - Search, selection, centering, tracking, coordinates, visibility, layer controls, and time controls.
+- Permission-gated phone pointing with a required north calibration stored on the device.
+- A local-only observation journal with check-ins, streaks, sightings, field notes, moon phase, and JSON backup and restore.
 - Hybrid offline operation: application and essential data can be cached; extended catalogs and imagery require a connection.
 - Stellarium Web Engine is used under AGPL-3.0. Spica and the combined distributed work will be published under AGPL-3.0 unless a commercial engine license is obtained.
 - Data and visual assets require independent provenance and license review.

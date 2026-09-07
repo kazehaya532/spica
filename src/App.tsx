@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   Asterisk,
+  BookOpen,
   CircleHelp,
   CloudSun,
+  Compass,
   Crosshair,
   Eye,
   Flashlight,
@@ -24,8 +26,11 @@ import {
   Waves,
   X
 } from 'lucide-react'
+import { CompassPanel } from './components/CompassPanel'
+import { JournalPanel } from './components/JournalPanel'
 import {
   centerTarget,
+  clearEngineSelection,
   createStellarium,
   getSelectionInfo,
   setLayer,
@@ -43,6 +48,7 @@ interface ObserverLocation {
   latitude: number
   longitude: number
   elevation: number
+  accuracy?: number
 }
 
 const DEFAULT_LOCATION: ObserverLocation = {
@@ -86,14 +92,21 @@ function getStoredLocation(): ObserverLocation {
 }
 
 function formatLocation(location: ObserverLocation): string {
-  const lat = `${Math.abs(location.latitude).toFixed(2)}°${location.latitude >= 0 ? 'N' : 'S'}`
-  const lon = `${Math.abs(location.longitude).toFixed(2)}°${location.longitude >= 0 ? 'E' : 'W'}`
-  return `${lat}, ${lon}`
+  const lat = `${Math.abs(location.latitude).toFixed(4)}°${location.latitude >= 0 ? 'N' : 'S'}`
+  const lon = `${Math.abs(location.longitude).toFixed(4)}°${location.longitude >= 0 ? 'E' : 'W'}`
+  const accuracy = location.accuracy === undefined
+    ? ''
+    : location.accuracy < 1_000
+      ? `, ±${Math.round(location.accuracy)} m`
+      : `, ±${(location.accuracy / 1_000).toFixed(1)} km`
+  return `${lat}, ${lon}${accuracy}`
 }
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<StellariumEngine | null>(null)
+  const compassButtonRef = useRef<HTMLButtonElement>(null)
+  const journalButtonRef = useRef<HTMLButtonElement>(null)
   const locationRef = useRef<ObserverLocation>(getStoredLocation())
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('loading')
   const [engineError, setEngineError] = useState('')
@@ -115,6 +128,19 @@ function App() {
   const [redMode, setRedMode] = useState(() => window.localStorage.getItem('spica-red-mode') === 'true')
   const [nightSky, setNightSky] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [compassOpen, setCompassOpen] = useState(false)
+  const [compassActive, setCompassActive] = useState(false)
+  const [journalOpen, setJournalOpen] = useState(false)
+
+  const closeCompassPanel = () => {
+    setCompassOpen(false)
+    window.requestAnimationFrame(() => compassButtonRef.current?.focus())
+  }
+
+  const closeJournalPanel = () => {
+    setJournalOpen(false)
+    window.requestAnimationFrame(() => journalButtonRef.current?.focus())
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -203,15 +229,22 @@ function App() {
           label: 'Current position',
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          elevation: position.coords.altitude ?? 0
+          elevation: position.coords.altitude ?? 0,
+          accuracy: position.coords.accuracy
         })
         setLocating(false)
       },
-      () => {
+      (error) => {
         setLocating(false)
-        setLocationError('Location permission was denied. Enter coordinates or keep the current place.')
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError('Location permission was denied. Allow precise location access or enter coordinates instead.')
+        } else if (error.code === error.TIMEOUT) {
+          setLocationError('A precise position could not be found in time. Move outdoors, try again, or enter coordinates.')
+        } else {
+          setLocationError('Your position is currently unavailable. Check location services or enter coordinates instead.')
+        }
       },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 }
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 }
     )
   }
 
@@ -235,6 +268,7 @@ function App() {
   const chooseTarget = async (target: SkyTarget) => {
     const engine = engineRef.current
     if (!engine) return
+    setCompassActive(false)
     const requestId = ++searchRequestRef.current
     setQuery(target.name)
     setSearchOpen(false)
@@ -325,10 +359,7 @@ function App() {
 
   const clearSelection = () => {
     const engine = engineRef.current
-    if (engine) {
-      engine.core.selection = null
-      engine.core.lock = null
-    }
+    if (engine) clearEngineSelection(engine)
     setSelection(null)
   }
 
@@ -343,7 +374,7 @@ function App() {
       <div className={`red-light-overlay ${redMode ? 'is-active' : ''}`} aria-hidden="true" />
 
       <header className="top-bar">
-        <a className="brand" href="/" aria-label="Spica home">
+        <a className="brand" href={import.meta.env.BASE_URL} aria-label="Spica home">
           <span className="brand-mark" aria-hidden="true">
             <img src={`${import.meta.env.BASE_URL}icons/spica-mark.svg`} alt="" />
           </span>
@@ -398,10 +429,51 @@ function App() {
             type="button"
             aria-label={`Observer location: ${location.label}`}
             aria-expanded={locationOpen}
-            onClick={() => setLocationOpen((open) => !open)}
+            onClick={() => {
+              setLocationOpen((open) => !open)
+              setCompassOpen(false)
+              setJournalOpen(false)
+              setHelpOpen(false)
+            }}
           >
             <MapPin aria-hidden="true" />
             <span><strong>{location.label}</strong><small>{formatLocation(location)}</small></span>
+          </button>
+          <button
+            ref={compassButtonRef}
+            className="icon-button"
+            type="button"
+            aria-label={compassActive ? 'Device pointing active' : 'Point with your phone'}
+            aria-pressed={compassActive}
+            aria-expanded={compassOpen}
+            aria-controls="compass-panel"
+            title="Device compass"
+            disabled={engineStatus !== 'ready'}
+            onClick={() => {
+              setCompassOpen((open) => !open)
+              setLocationOpen(false)
+              setJournalOpen(false)
+              setHelpOpen(false)
+            }}
+          >
+            <Compass />
+          </button>
+          <button
+            ref={journalButtonRef}
+            className="icon-button"
+            type="button"
+            aria-label="Open observation journal"
+            aria-expanded={journalOpen}
+            aria-controls="journal-panel"
+            title="Observation journal"
+            onClick={() => {
+              setJournalOpen((open) => !open)
+              setLocationOpen(false)
+              setCompassOpen(false)
+              setHelpOpen(false)
+            }}
+          >
+            <BookOpen />
           </button>
           <button
             className="icon-button"
@@ -420,7 +492,12 @@ function App() {
           <button className="icon-button desktop-action" type="button" aria-label="Enter fullscreen" onClick={() => document.documentElement.requestFullscreen?.()}>
             <Maximize2 />
           </button>
-          <button className="icon-button desktop-action" type="button" aria-label="Show controls help" aria-expanded={helpOpen} onClick={() => setHelpOpen((open) => !open)}>
+          <button className="icon-button desktop-action" type="button" aria-label="Show controls help" aria-expanded={helpOpen} onClick={() => {
+            setHelpOpen((open) => !open)
+            setLocationOpen(false)
+            setCompassOpen(false)
+            setJournalOpen(false)
+          }}>
             <CircleHelp />
           </button>
         </nav>
@@ -431,7 +508,7 @@ function App() {
       {locationOpen && (
         <aside className="location-panel" aria-labelledby="location-title">
           <div className="panel-heading">
-            <div><h2 id="location-title">Observer location</h2><p>The sky updates to this viewpoint.</p></div>
+            <div><h2 id="location-title">Observer location</h2><p>{location.accuracy === undefined ? 'The sky updates to this viewpoint.' : `Last GPS fix: ${formatLocation(location)}`}</p></div>
             <button className="icon-button" type="button" aria-label="Close location panel" onClick={() => setLocationOpen(false)}><X /></button>
           </div>
           <button className="primary-action" type="button" disabled={locating} onClick={useCurrentLocation}>
@@ -465,6 +542,21 @@ function App() {
           </dl>
         </aside>
       )}
+
+      <CompassPanel
+        open={compassOpen}
+        active={compassActive}
+        getEngine={() => engineRef.current}
+        onActiveChange={setCompassActive}
+        onClose={closeCompassPanel}
+        onStartPointing={clearSelection}
+      />
+
+      <JournalPanel
+        open={journalOpen}
+        selectedObject={selection?.name ?? null}
+        onClose={closeJournalPanel}
+      />
 
       <aside className={`object-panel ${selection ? 'has-selection' : ''}`} aria-live="polite">
         {selection ? (

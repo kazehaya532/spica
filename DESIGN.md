@@ -22,13 +22,16 @@ copy.
   engine's realistic atmosphere; it also reveals Milky Way and deep-sky data.
 - Red-light mode remains separate and uses Stellarium's full-surface red
   multiply treatment for dark adaptation without changing simulation time.
+- Device pointing uses a compact instrument readout and explicit calibration
+  gate; the journal reads as a field notebook without displacing the sky.
 
 ## Responsive Contract
 
 - Desktop: search is centred, discovery or selection details stay left, and
   time controls anchor the bottom centre.
 - Mobile: search moves below the title row, layer controls collapse to icons,
-  and selected-object details become a bounded bottom sheet.
+  selected-object details become a bounded bottom sheet, and utility panels
+  become full-height scrollable field sheets below search.
 - Primary controls retain at least a 42px touch target.
 
 ## Accessibility Contract

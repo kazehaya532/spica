@@ -44,13 +44,15 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
 button,
 a,
-input {
+input,
+textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -397,6 +399,8 @@ button:disabled {
 
 .location-panel,
 .help-panel,
+.compass-panel,
+.journal-panel,
 .object-panel {
   border: 1px solid var(--line);
   background: var(--surface);
@@ -424,6 +428,28 @@ button:disabled {
   border-radius: 16px;
 }
 
+.compass-panel,
+.journal-panel {
+  position: absolute;
+  top: 78px;
+  right: 20px;
+  z-index: 19;
+  width: min(400px, calc(100% - 40px));
+  padding: 20px;
+  border-radius: 16px;
+}
+
+.journal-panel {
+  bottom: 78px;
+  width: min(430px, calc(100% - 40px));
+  overflow-y: auto;
+}
+
+.compass-panel {
+  max-height: calc(100dvh - 98px);
+  overflow-y: auto;
+}
+
 .panel-close {
   position: absolute;
   top: 10px;
@@ -433,6 +459,7 @@ button:disabled {
 }
 
 .help-panel h2,
+.journal-heading h2,
 .panel-heading h2,
 .panel-heading h1,
 .welcome-copy h1,
@@ -445,8 +472,501 @@ button:disabled {
 }
 
 .help-panel h2,
+.journal-heading h2,
 .panel-heading h2 {
   font-size: 24px;
+}
+
+.compass-intro {
+  padding-top: 24px;
+  text-align: center;
+}
+
+.compass-intro > svg {
+  width: 54px;
+  height: 54px;
+  color: var(--accent);
+  stroke-width: 1.2;
+}
+
+.compass-intro p,
+.calibration-step p {
+  margin: 12px auto 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.bearing-readout {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 13px;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.bearing-readout > svg {
+  width: 52px;
+  height: 52px;
+  color: var(--accent);
+  stroke-width: 1.25;
+  transition: transform 180ms ease-out;
+}
+
+.bearing-readout strong,
+.bearing-readout span {
+  display: block;
+}
+
+.bearing-readout strong {
+  font-family: 'Newsreader Variable', serif;
+  font-size: 32px;
+  font-weight: 520;
+  line-height: 1;
+}
+
+.bearing-readout span,
+.bearing-readout small {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.bearing-readout small {
+  text-align: right;
+}
+
+.calibration-step {
+  padding-top: 20px;
+}
+
+.calibration-step h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.calibration-step.is-ready h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--success);
+}
+
+.calibration-step h3 svg {
+  width: 16px;
+}
+
+.calibration-quality {
+  margin-top: 16px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.calibration-quality.is-stable {
+  color: var(--success);
+}
+
+.calibration-quality.is-unstable {
+  color: var(--danger);
+}
+
+.stability-meter {
+  height: 3px;
+  overflow: hidden;
+  margin-bottom: 7px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.stability-meter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transform-origin: left;
+  transition: transform 180ms ease-out;
+}
+
+.fine-adjustment {
+  margin-top: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.fine-adjustment > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.fine-adjustment strong {
+  font-size: 11px;
+}
+
+.fine-adjustment output {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.fine-adjustment p {
+  margin-top: 6px;
+  font-size: 10px;
+}
+
+.fine-adjustment-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.fine-adjustment-controls button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 10px;
+  font-weight: 680;
+}
+
+.fine-adjustment-controls button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.fine-adjustment-controls svg {
+  width: 13px;
+}
+
+.recalibrate-action {
+  margin: 12px auto 0;
+}
+
+.compass-panel > .form-error {
+  margin-top: 16px;
+}
+
+.journal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.journal-heading h2 {
+  margin: 0;
+  font-family: 'Newsreader Variable', serif;
+  font-weight: 520;
+  letter-spacing: -0.025em;
+}
+
+.journal-heading p {
+  margin: 4px 0 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.journal-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.journal-date-row label {
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.journal-date-row input {
+  min-height: 42px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  color-scheme: dark;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+}
+
+.journal-night {
+  padding: 18px 0 4px;
+}
+
+.moon-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.moon-summary > svg {
+  width: 38px;
+  height: 38px;
+  color: var(--accent-strong);
+  stroke-width: 1.25;
+}
+
+.moon-summary strong,
+.moon-summary span {
+  display: block;
+}
+
+.moon-summary strong {
+  font-family: 'Newsreader Variable', serif;
+  font-size: 20px;
+  font-weight: 520;
+}
+
+.moon-summary span {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.streak-copy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 10px;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.streak-copy svg {
+  width: 15px;
+  color: var(--accent);
+}
+
+.check-in-action {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.check-in-action.is-checked {
+  border-color: color-mix(in srgb, var(--success) 55%, transparent);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface-soft));
+}
+
+.check-in-action svg {
+  width: 17px;
+}
+
+.journal-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.journal-section h3 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.journal-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.journal-section-heading .text-action {
+  min-height: 42px;
+  font-size: 10px;
+}
+
+.journal-empty {
+  margin: 0 0 10px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.sighting-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.sighting-list li {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 3px;
+  padding-left: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 11px;
+}
+
+.sighting-list button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  color: var(--ink-muted);
+  background: transparent;
+}
+
+.sighting-list svg {
+  width: 13px;
+}
+
+.sighting-form {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+}
+
+.sighting-form input,
+.journal-section textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  outline: 0;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 12px;
+}
+
+.sighting-form input {
+  height: 44px;
+  padding: 0 11px;
+  border-radius: 9px 0 0 9px;
+}
+
+.sighting-form button {
+  display: grid;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  color: var(--accent-strong);
+  background: var(--surface-soft);
+}
+
+.sighting-form svg {
+  width: 16px;
+}
+
+.sighting-form input:focus,
+.journal-section textarea:focus {
+  border-color: var(--accent);
+}
+
+.journal-section textarea {
+  min-height: 110px;
+  resize: vertical;
+  padding: 11px;
+  border-radius: 9px;
+  line-height: 1.5;
+}
+
+.journal-section textarea::placeholder,
+.sighting-form input::placeholder {
+  color: var(--ink-faint);
+}
+
+.journal-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.journal-history button {
+  min-height: 42px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-muted);
+  background: transparent;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.journal-history button.is-current {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.journal-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.journal-actions .secondary-action {
+  min-height: 44px;
+  flex: 1;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.delete-entry {
+  display: grid;
+  width: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--danger);
+  background: transparent;
+}
+
+.delete-entry svg {
+  width: 16px;
+}
+
+.journal-status {
+  display: flex;
+  min-height: 17px;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 0 0;
+  color: var(--ink-faint);
+  font-size: 9px;
+}
+
+.journal-status svg {
+  width: 12px;
 }
 
 .help-panel dl {
@@ -1086,9 +1606,24 @@ button:disabled {
   }
 
   .location-panel,
-  .help-panel {
+  .help-panel,
+  .compass-panel,
+  .journal-panel {
     top: 132px;
     right: 12px;
+  }
+
+  .compass-panel,
+  .journal-panel {
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 144px);
+    overflow-y: auto;
+  }
+
+  .journal-panel {
+    bottom: 12px;
+    max-height: none;
   }
 
   .toast {
@@ -1108,6 +1643,14 @@ button:disabled {
   .brand-mark {
     width: 27px;
     height: 27px;
+  }
+
+  .top-actions {
+    gap: 4px;
+  }
+
+  .brand > span:last-child {
+    display: none;
   }
 
   .desktop-action {
