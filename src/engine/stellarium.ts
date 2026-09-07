@@ -167,6 +167,14 @@ export function setLayer(engine: StellariumEngine, layer: LayerId, visible: bool
   }
 }
 
+export function clearEngineSelection(engine: StellariumEngine): void {
+  // The engine wrapper treats JavaScript null as a property read. A serialized
+  // zero is the native null object pointer required by TYPE_OBJ setters.
+  const nativeNull = 0 as unknown as StelObject
+  engine.core.lock = nativeNull
+  engine.core.selection = nativeNull
+}
+
 export interface TargetSearchOptions {
   timeoutMs?: number
   retryIntervalMs?: number

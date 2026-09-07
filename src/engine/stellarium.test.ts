@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { centerTarget, findNextNightMjd, type StellariumEngine } from './stellarium'
+import { centerTarget, clearEngineSelection, findNextNightMjd, type StellariumEngine } from './stellarium'
 import type { SkyTarget } from '../lib/astronomy'
 
 describe('Stellarium integration helpers', () => {
@@ -15,6 +15,17 @@ describe('Stellarium integration helpers', () => {
   it('keeps the current instant when the sky is already dark', () => {
     const start = 60_000.12345
     expect(findNextNightMjd(start, () => -0.3)).toBe(start)
+  })
+
+  it('clears native lock and selection object pointers', () => {
+    const object = { designations: vi.fn(), getInfo: vi.fn() }
+    const core = { selection: object, lock: object }
+    const engine = { core } as unknown as StellariumEngine
+
+    clearEngineSelection(engine)
+
+    expect(core.lock).toBe(0)
+    expect(core.selection).toBe(0)
   })
 
   it('retries catalog lookup while asynchronous tiles load', async () => {
