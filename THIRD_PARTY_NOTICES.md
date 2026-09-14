@@ -121,6 +121,81 @@ Comet, minor-planet, and satellite element files, the Belarusian sky culture
 constellation illustrations, and unused landscape/sky-culture translations
 were removed from the vendored tree because Spica never served them.
 
+## Weather, Fallback Geocoding, and Elevation Data — Open-Meteo
+
+Weather forecasts are requested directly from https://api.open-meteo.com/ after
+the user explicitly checks conditions. Data is provided by Open-Meteo under
+CC BY 4.0: https://creativecommons.org/licenses/by/4.0/.
+Source and documentation: https://open-meteo.com/en/docs.
+
+Spica derives qualitative observing outlooks and two-hour recommendations from
+the hourly data; these are Spica's interpretations, not Open-Meteo products or
+guarantees. Provider attribution and the data license appear in the forecast UI.
+
+The free hosted API permits non-commercial use and is subject to rate limits
+(600 calls/minute, 5,000/hour, 10,000/day at implementation). Commercial operation
+requires an appropriate plan. The service may log requested coordinates and IP
+addresses; consult its current terms and privacy policy:
+https://open-meteo.com/en/terms.
+
+Place queries are sent to https://geocoding-api.open-meteo.com/ only when a
+user-submitted Photon search has no usable result or Photon is unavailable.
+Coordinates are sent to Open-Meteo's elevation API after the user selects a
+Photon result, clicks or drags the map pin, or browser GPS does not provide
+altitude. These request types are not cached by Spica's service worker.
+
+## Place Search — Photon
+
+Place searches are requested directly from the public Photon endpoint at
+https://photon.komoot.io/ after the user explicitly submits a query. Photon is
+open-source geocoding software maintained by Komoot and searches © OpenStreetMap
+contributors data available under the Open Database License. Project source:
+https://github.com/komoot/photon. OpenStreetMap attribution and license:
+https://www.openstreetmap.org/copyright.
+
+Photon receives the submitted query and the user's IP address. The hosted public
+endpoint has no availability guarantee; Spica uses explicit searches rather than
+background or autocomplete requests and falls back to Open-Meteo when needed.
+Photon responses are not cached by Spica's service worker.
+
+## Interactive Location Map
+
+The location picker uses MapLibre GL JS, licensed BSD-3-Clause, to render map
+styles and tiles served by OpenFreeMap. OpenFreeMap attribution and terms:
+https://openfreemap.org/. The map uses the OpenMapTiles schema
+(https://openmaptiles.org/) and © OpenStreetMap contributors map data, available
+under the Open Database License: https://www.openstreetmap.org/copyright.
+
+Opening the location panel requests tiles for the viewed region from
+OpenFreeMap, which receives the viewed region and the user's IP address. Map
+requests use normal browser HTTP caching and are not cached by Spica's service
+worker.
+
+## Modeled Sky Brightness — Falchi et al. (2016)
+
+The optional compact light-pollution map (`public/lightmap/spica-lightmap.bin`)
+is a downsampled and quantized derivative of the 2015 simulated zenith-radiance
+map published with:
+
+> Falchi, F.; Cinzano, P.; Duriscoe, D.; Kyba, C. C. M.; Elvidge, C. D.;
+> Baugh, K.; Portnov, B. A.; Rybnikova, N. A.; Furgoni, R. (2016): Supplement
+> to: The New World Atlas of Artificial Night Sky Brightness. GFZ Data
+> Services. https://doi.org/10.5880/GFZ.1.4.2016.001
+
+The source dataset and Spica's derivative are licensed under Creative Commons
+Attribution-NonCommercial 4.0 International (CC BY-NC 4.0):
+https://creativecommons.org/licenses/by-nc/4.0/legalcode. The derivative remains
+CC BY-NC 4.0 and is not relicensed under Spica's AGPL. Commercial use is not
+permitted without separate authorization from the rightsholder.
+
+Spica downsamples the source to an approximately 0.1-degree global grid,
+quantizes artificial brightness logarithmically, and run-length encodes the
+result. Bortle class, SQM, naked-eye limiting magnitude, and natural-sky ratio
+shown by the app are calculated estimates, not values supplied or endorsed by
+the dataset authors. The model describes 2015 zenith brightness and does not
+represent current weather, local obstructions, terrain shielding, or later
+changes in outdoor lighting.
+
 ## Fonts and Icons
 
 - Manrope, Copyright 2019 The Manrope Project Authors, licensed under the SIL

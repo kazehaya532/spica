@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/spica/',
+  server: {
+    allowedHosts: ['.trycloudflare.com'],
+  },
   plugins: [
     react(),
     VitePWA({
@@ -28,8 +31,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,wasm,ttf}'],
+        globIgnores: ['**/maplibre-gl-*.js'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/lightmap/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'spica-lightmap-v1',
+              expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
           {
             urlPattern: ({ url }) => url.pathname.includes('/skydata/'),
             handler: 'CacheFirst',

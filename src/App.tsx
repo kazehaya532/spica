@@ -3,13 +3,13 @@ import {
   Asterisk,
   BookOpen,
   CircleHelp,
+  CloudMoon,
   CloudSun,
   Compass,
   Crosshair,
   Eye,
   Flashlight,
   Grid3X3,
-  LocateFixed,
   MapPin,
   Maximize2,
   Minus,
@@ -27,35 +27,33 @@ import {
   X
 } from 'lucide-react'
 import { CompassPanel } from './components/CompassPanel'
+import { ConditionsPanel } from './components/ConditionsPanel'
 import { JournalPanel } from './components/JournalPanel'
+import { LocationPanel } from './components/LocationPanel'
 import {
   centerTarget,
   clearEngineSelection,
   createStellarium,
   getSelectionInfo,
+  getMoonConditions,
   setLayer,
   showTonight,
   type LayerId,
+  type MoonConditions,
   type SelectionInfo,
   type StellariumEngine
 } from './engine/stellarium'
 import { dateToMjd, mjdToDate, SKY_TARGETS, toDateTimeInput, type SkyTarget } from './lib/astronomy'
+import { fetchTerrainElevation, formatObserverCoordinates, type ObserverLocation } from './lib/location'
 
 type EngineStatus = 'loading' | 'ready' | 'error'
-
-interface ObserverLocation {
-  label: string
-  latitude: number
-  longitude: number
-  elevation: number
-  accuracy?: number
-}
 
 const DEFAULT_LOCATION: ObserverLocation = {
   label: 'Greenwich, London',
   latitude: 51.4769,
   longitude: 0,
-  elevation: 46
+  elevation: 46,
+  timezone: 'Europe/London'
 }
 
 const INITIAL_LAYERS: Record<LayerId, boolean> = {
@@ -91,22 +89,13 @@ function getStoredLocation(): ObserverLocation {
   }
 }
 
-function formatLocation(location: ObserverLocation): string {
-  const lat = `${Math.abs(location.latitude).toFixed(4)}°${location.latitude >= 0 ? 'N' : 'S'}`
-  const lon = `${Math.abs(location.longitude).toFixed(4)}°${location.longitude >= 0 ? 'E' : 'W'}`
-  const accuracy = location.accuracy === undefined
-    ? ''
-    : location.accuracy < 1_000
-      ? `, ±${Math.round(location.accuracy)} m`
-      : `, ±${(location.accuracy / 1_000).toFixed(1)} km`
-  return `${lat}, ${lon}${accuracy}`
-}
-
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<StellariumEngine | null>(null)
   const compassButtonRef = useRef<HTMLButtonElement>(null)
+  const conditionsButtonRef = useRef<HTMLButtonElement>(null)
   const journalButtonRef = useRef<HTMLButtonElement>(null)
+  const locationButtonRef = useRef<HTMLButtonElement>(null)
   const locationRef = useRef<ObserverLocation>(getStoredLocation())
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('loading')
   const [engineError, setEngineError] = useState('')
@@ -129,6 +118,8 @@ function App() {
   const [nightSky, setNightSky] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [compassOpen, setCompassOpen] = useState(false)
+  const [conditionsOpen, setConditionsOpen] = useState(false)
+  const [moonConditions, setMoonConditions] = useState<MoonConditions | null>(null)
   const [compassActive, setCompassActive] = useState(false)
   const [journalOpen, setJournalOpen] = useState(false)
 
@@ -137,9 +128,19 @@ function App() {
     window.requestAnimationFrame(() => compassButtonRef.current?.focus())
   }
 
+  const closeConditionsPanel = () => {
+    setConditionsOpen(false)
+    window.requestAnimationFrame(() => conditionsButtonRef.current?.focus())
+  }
+
   const closeJournalPanel = () => {
     setJournalOpen(false)
     window.requestAnimationFrame(() => journalButtonRef.current?.focus())
+  }
+
+  const closeLocationPanel = () => {
+    setLocationOpen(false)
+    window.requestAnimationFrame(() => locationButtonRef.current?.focus())
   }
 
   useEffect(() => {
@@ -176,6 +177,12 @@ function App() {
       window.clearInterval(interval)
     }
   }, [])
+
+  const moonMinute = Math.floor(skyDate.getTime() / 60_000)
+  useEffect(() => {
+    if (!conditionsOpen || engineStatus !== 'ready' || !engineRef.current) return
+    setMoonConditions(getMoonConditions(engineRef.current))
+  }, [conditionsOpen, engineStatus, moonMinute, location.latitude, location.longitude, location.elevation])
 
   useEffect(() => {
     window.localStorage.setItem('spica-red-mode', String(redMode))
@@ -214,6 +221,7 @@ function App() {
     }
     setLocationOpen(false)
     setLocationError('')
+    window.requestAnimationFrame(() => locationButtonRef.current?.focus())
   }
 
   const useCurrentLocation = () => {
@@ -224,12 +232,21 @@ function App() {
     setLocating(true)
     setLocationError('')
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
+        let elevation = position.coords.altitude ?? 0
+        if (position.coords.altitude === null && navigator.onLine) {
+          try {
+            elevation = await fetchTerrainElevation(position.coords.latitude, position.coords.longitude, new AbortController().signal)
+          } catch {
+            // A GPS fix remains useful when terrain elevation cannot be estimated.
+          }
+        }
         updateLocation({
           label: 'Current position',
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          elevation: position.coords.altitude ?? 0,
+          elevation,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           accuracy: position.coords.accuracy
         })
         setLocating(false)
@@ -246,23 +263,6 @@ function App() {
       },
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 }
     )
-  }
-
-  const saveCoordinates = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    const latitude = Number(form.get('latitude'))
-    const longitude = Number(form.get('longitude'))
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-      setLocationError('Latitude must be -90 to 90 and longitude must be -180 to 180.')
-      return
-    }
-    updateLocation({
-      label: String(form.get('label') || 'Custom location'),
-      latitude,
-      longitude,
-      elevation: Number(form.get('elevation')) || 0
-    })
   }
 
   const chooseTarget = async (target: SkyTarget) => {
@@ -341,14 +341,31 @@ function App() {
       setSkyDate(new Date())
       setSpeed(1)
       setNightSky(false)
+      setSearchMessage(`Returned to the current sky at ${location.label}.`)
       return
     }
 
+    const startMjd = engine.core.observer.utc
     const nightMjd = showTonight(engine)
     engine.core.time_speed = 1
     setSkyDate(mjdToDate(nightMjd))
     setSpeed(1)
     setNightSky(true)
+    if (Math.abs(nightMjd - startMjd) < 1 / 86_400) {
+      setSearchMessage(`It is already astronomical night at ${location.label} for the selected sky time. No time jump was needed.`)
+    } else {
+      const target = mjdToDate(nightMjd)
+      let formattedTime: string
+      try {
+        formattedTime = new Intl.DateTimeFormat(undefined, {
+          weekday: 'short', hour: 'numeric', minute: '2-digit',
+          ...(location.timezone ? { timeZone: location.timezone } : {})
+        }).format(target)
+      } catch {
+        formattedTime = target.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
+      }
+      setSearchMessage(`Jumped to ${formattedTime}, the start of astronomical darkness at ${location.label}.`)
+    }
     setLayers((current) => ({
       ...current,
       atmosphere: true,
@@ -425,19 +442,39 @@ function App() {
         <nav className="top-actions" aria-label="View actions">
           {!isOnline && <span className="offline-status">Offline</span>}
           <button
+            ref={locationButtonRef}
             className="location-button"
             type="button"
             aria-label={`Observer location: ${location.label}`}
             aria-expanded={locationOpen}
             onClick={() => {
               setLocationOpen((open) => !open)
+              setConditionsOpen(false)
               setCompassOpen(false)
               setJournalOpen(false)
               setHelpOpen(false)
             }}
           >
             <MapPin aria-hidden="true" />
-            <span><strong>{location.label}</strong><small>{formatLocation(location)}</small></span>
+            <span><strong>{location.label}</strong><small>{formatObserverCoordinates(location)}</small></span>
+          </button>
+          <button
+            ref={conditionsButtonRef}
+            className="icon-button"
+            type="button"
+            aria-label="Open observing conditions"
+            aria-expanded={conditionsOpen}
+            aria-controls="conditions-panel"
+            title="Observing conditions"
+            onClick={() => {
+              setConditionsOpen((open) => !open)
+              setLocationOpen(false)
+              setCompassOpen(false)
+              setJournalOpen(false)
+              setHelpOpen(false)
+            }}
+          >
+            <CloudMoon />
           </button>
           <button
             ref={compassButtonRef}
@@ -452,6 +489,7 @@ function App() {
             onClick={() => {
               setCompassOpen((open) => !open)
               setLocationOpen(false)
+              setConditionsOpen(false)
               setJournalOpen(false)
               setHelpOpen(false)
             }}
@@ -469,6 +507,7 @@ function App() {
             onClick={() => {
               setJournalOpen((open) => !open)
               setLocationOpen(false)
+              setConditionsOpen(false)
               setCompassOpen(false)
               setHelpOpen(false)
             }}
@@ -495,6 +534,7 @@ function App() {
           <button className="icon-button desktop-action" type="button" aria-label="Show controls help" aria-expanded={helpOpen} onClick={() => {
             setHelpOpen((open) => !open)
             setLocationOpen(false)
+            setConditionsOpen(false)
             setCompassOpen(false)
             setJournalOpen(false)
           }}>
@@ -505,28 +545,16 @@ function App() {
 
       {searchMessage && <p className="toast" role="status">{searchMessage}</p>}
 
-      {locationOpen && (
-        <aside className="location-panel" aria-labelledby="location-title">
-          <div className="panel-heading">
-            <div><h2 id="location-title">Observer location</h2><p>{location.accuracy === undefined ? 'The sky updates to this viewpoint.' : `Last GPS fix: ${formatLocation(location)}`}</p></div>
-            <button className="icon-button" type="button" aria-label="Close location panel" onClick={() => setLocationOpen(false)}><X /></button>
-          </div>
-          <button className="primary-action" type="button" disabled={locating} onClick={useCurrentLocation}>
-            <LocateFixed /> {locating ? 'Finding your position…' : 'Use my current position'}
-          </button>
-          <div className="panel-divider"><span>or enter coordinates</span></div>
-          <form className="coordinate-form" onSubmit={saveCoordinates}>
-            <label>Place name<input name="label" defaultValue={location.label} /></label>
-            <div className="coordinate-row">
-              <label>Latitude<input name="latitude" type="number" step="any" min="-90" max="90" defaultValue={location.latitude} required /></label>
-              <label>Longitude<input name="longitude" type="number" step="any" min="-180" max="180" defaultValue={location.longitude} required /></label>
-            </div>
-            <label>Elevation in metres<input name="elevation" type="number" step="any" defaultValue={location.elevation} /></label>
-            {locationError && <p className="form-error" role="alert">{locationError}</p>}
-            <button className="secondary-action" type="submit">Set observer location</button>
-          </form>
-        </aside>
-      )}
+      <LocationPanel
+        open={locationOpen}
+        location={location}
+        isOnline={isOnline}
+        locating={locating}
+        externalError={locationError}
+        onUseCurrentLocation={useCurrentLocation}
+        onSave={updateLocation}
+        onClose={closeLocationPanel}
+      />
 
       {helpOpen && (
         <aside className="help-panel" aria-labelledby="help-title">
@@ -550,6 +578,19 @@ function App() {
         onActiveChange={setCompassActive}
         onClose={closeCompassPanel}
         onStartPointing={clearSelection}
+      />
+
+      <ConditionsPanel
+        open={conditionsOpen}
+        location={location}
+        skyDate={skyDate}
+        moon={moonConditions}
+        isOnline={isOnline}
+        onClose={closeConditionsPanel}
+         onChangeLocation={() => {
+           setConditionsOpen(false)
+           setLocationOpen(true)
+         }}
       />
 
       <JournalPanel

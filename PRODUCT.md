@@ -30,13 +30,21 @@ People use Spica outdoors at night, indoors while planning an observation, and i
 
 - Responsive installable PWA for modern desktop and mobile browsers.
 - Realistic spherical sky rendered by Stellarium Web Engine.
-- Current or user-selected time and observer location.
+- Current or user-selected time and observer location, with optional open-map
+  search, terrain elevation lookup, and manual offline coordinate entry.
+- Opt-in hourly night weather forecasts for the saved observer location, with
+  cloud cover, precipitation, wind, and transparent observing-window guidance.
+- Same-origin, on-device lookup of a static modeled sky-darkness estimate, plus
+  accurate lunar phase, illumination, horizon position, and rise/set events for
+  the selected sky time.
 - Search, selection, centering, tracking, coordinates, visibility, layer controls, and time controls.
 - Permission-gated phone pointing with a required north calibration stored on the device.
 - A local-only observation journal with check-ins, streaks, sightings, field notes, moon phase, and JSON backup and restore.
 - Hybrid offline operation: application and essential data can be cached; extended catalogs and imagery require a connection.
 - Stellarium Web Engine is used under AGPL-3.0. Spica and the combined distributed work will be published under AGPL-3.0 unless a commercial engine license is obtained.
 - Data and visual assets require independent provenance and license review.
+- The Falchi 2016 lightmap derivative is CC BY-NC 4.0 and limits the hosted app
+  to non-commercial use unless that dataset is replaced or separately licensed.
 - The first release excludes telescope hardware control, plugins and scripting, dome projection, ocular simulation, full Gaia deep zoom, satellites, comets, eclipses, and full offline high-resolution catalogs.
 - English is the first-release interface language; user-facing strings remain structured for later translation.
 

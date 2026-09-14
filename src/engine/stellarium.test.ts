@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { centerTarget, clearEngineSelection, findNextNightMjd, type StellariumEngine } from './stellarium'
+import { centerTarget, clearEngineSelection, findNextNightMjd, getMoonConditions, type StellariumEngine } from './stellarium'
 import type { SkyTarget } from '../lib/astronomy'
 
 describe('Stellarium integration helpers', () => {
@@ -53,5 +53,48 @@ describe('Stellarium integration helpers', () => {
     expect(engine.getObjByHip).toHaveBeenCalledWith(65474)
     expect(engine.core.selection).toBe(object)
     expect(engine.pointAndLock).toHaveBeenCalledWith(object, 0.7, 25 * engine.D2R)
+  })
+
+  it('derives local moonlight conditions from the selected Stellarium observer time', () => {
+    const observer = { utc: 60_000, tt: 60_000.0008, destroy: vi.fn() }
+    const futureObserver = { utc: 60_000, tt: 60_000.0008, destroy: vi.fn() }
+    const coreObserver = {
+      ...observer,
+      clone: vi.fn()
+        .mockReturnValueOnce(observer)
+        .mockReturnValueOnce(futureObserver)
+    }
+    const moon = {
+      getInfo: vi.fn((key: string, selectedObserver: typeof observer) => {
+        if (key === 'radec') return [1, 2, 3]
+        if (key === 'phase') return selectedObserver === futureObserver ? 0.76 : 0.72
+        return null
+      }),
+      computeVisibility: vi.fn(() => [{ rise: observer.tt + 0.1, set: observer.tt + 0.5 }])
+    }
+    const engine = {
+      D2R: Math.PI / 180,
+      core: { observer: coreObserver },
+      getObj: vi.fn(() => moon),
+      convertFrame: vi.fn(() => [4, 5, 6]),
+      c2s: vi.fn(() => [-Math.PI / 2, Math.PI / 6])
+    } as unknown as StellariumEngine
+
+    expect(getMoonConditions(engine)).toEqual({
+      phaseName: 'Waxing Gibbous',
+      illumination: 72,
+      altitude: 29.999999999999996,
+      azimuth: 270,
+      aboveHorizon: true,
+      nextRiseMjd: 60_000.1,
+      nextSetMjd: 60_000.5
+    })
+    expect(moon.computeVisibility).toHaveBeenCalledWith({
+      obs: observer,
+      startTime: observer.tt,
+      endTime: observer.tt + 1.1
+    })
+    expect(observer.destroy).toHaveBeenCalled()
+    expect(futureObserver.destroy).toHaveBeenCalled()
   })
 })

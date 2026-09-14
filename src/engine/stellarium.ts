@@ -10,6 +10,7 @@ export type LayerId = 'constellations' | 'atmosphere' | 'landscape' | 'azimuthal
 interface StelObject {
   designations(): string[]
   getInfo(key: string, observer?: StelObserver): unknown
+  computeVisibility?(args?: { obs?: StelObserver; startTime?: number; endTime?: number }): Array<{ rise: number | null; set: number | null }>
   update?(): void
 }
 
@@ -18,6 +19,7 @@ interface StelObserver {
   longitude: number
   elevation: number
   utc: number
+  tt: number
   yaw: number
   pitch: number
   clone(): StelObserver
@@ -78,6 +80,16 @@ export interface SelectionInfo {
   azimuth: string
   altitude: string
   visibility: string
+}
+
+export interface MoonConditions {
+  phaseName: string
+  illumination: number
+  altitude: number
+  azimuth: number
+  aboveHorizon: boolean
+  nextRiseMjd: number | null
+  nextSetMjd: number | null
 }
 
 type EngineFactory = (options: {
@@ -250,6 +262,63 @@ export function showTonight(engine: StellariumEngine): number {
     engine.core.milkyway.visible = true
     return nightMjd
   } finally {
+    observer.destroy()
+  }
+}
+
+function moonPhaseName(illumination: number, waxing: boolean): string {
+  if (illumination <= 0.02) return 'New Moon'
+  if (illumination >= 0.98) return 'Full Moon'
+  if (Math.abs(illumination - 0.5) <= 0.03) return waxing ? 'First Quarter' : 'Last Quarter'
+  if (illumination < 0.5) return waxing ? 'Waxing Crescent' : 'Waning Crescent'
+  return waxing ? 'Waxing Gibbous' : 'Waning Gibbous'
+}
+
+function eventTimeToUtc(eventTime: number | null, observer: StelObserver): number | null {
+  if (eventTime === null || !Number.isFinite(eventTime)) return null
+  const deltaT = observer.tt - observer.utc
+  return Number.isFinite(deltaT) ? eventTime - deltaT : eventTime
+}
+
+export function getMoonConditions(engine: StellariumEngine): MoonConditions | null {
+  const moon = engine.getObj('NAME Moon')
+  if (!moon) return null
+  const observer = engine.core.observer.clone()
+  const futureObserver = engine.core.observer.clone()
+
+  try {
+    const phase = moon.getInfo('phase', observer)
+    if (typeof phase !== 'number' || !Number.isFinite(phase)) return null
+    const position = moon.getInfo('radec', observer)
+    const observed = engine.convertFrame(observer, 'ICRF', 'OBSERVED', position)
+    let [azimuth, altitude] = engine.c2s(observed)
+    if (!Number.isFinite(azimuth) || !Number.isFinite(altitude)) return null
+    azimuth = (azimuth + Math.PI * 2) % (Math.PI * 2)
+
+    futureObserver.utc = observer.utc + 0.25
+    const futurePhase = moon.getInfo('phase', futureObserver)
+    const waxing = typeof futurePhase === 'number' && Number.isFinite(futurePhase)
+      ? futurePhase >= phase
+      : phase < 0.5
+    const visibility = moon.computeVisibility?.({
+      obs: observer,
+      startTime: observer.tt,
+      endTime: observer.tt + 1.1
+    })[0]
+
+    return {
+      phaseName: moonPhaseName(phase, waxing),
+      illumination: Math.min(100, Math.max(0, Math.round(phase * 100))),
+      altitude: altitude / engine.D2R,
+      azimuth: azimuth / engine.D2R,
+      aboveHorizon: altitude > 0,
+      nextRiseMjd: eventTimeToUtc(visibility?.rise ?? null, observer),
+      nextSetMjd: eventTimeToUtc(visibility?.set ?? null, observer)
+    }
+  } catch {
+    return null
+  } finally {
+    futureObserver.destroy()
     observer.destroy()
   }
 }

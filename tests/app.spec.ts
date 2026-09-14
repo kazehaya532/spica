@@ -65,6 +65,7 @@ test('offline catalog resolves named stars and a deep-sky object after loading',
 
 test('mobile controls fit the viewport and location remains manual-first', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('mobile'), 'Mobile layout is covered in the mobile project.')
+  await page.setViewportSize({ width: 320, height: 800 })
   await page.addInitScript(() => {
     const state = window as Window & { __spicaGeolocationOptions?: PositionOptions }
     Object.defineProperty(navigator, 'geolocation', {
@@ -97,6 +98,13 @@ test('mobile controls fit the viewport and location remains manual-first', async
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(scrollWidth).toBeLessThanOrEqual(viewportWidth)
 
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false })
+    window.dispatchEvent(new Event('offline'))
+  })
+  await expect(page.getByText('Offline', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewportWidth)
+
   await page.getByRole('button', { name: 'Observer location: Greenwich, London' }).click()
   await expect(page.getByRole('heading', { name: 'Observer location' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Use my current position' })).toBeVisible()
@@ -115,6 +123,48 @@ test('mobile controls fit the viewport and location remains manual-first', async
   await expect(page.getByText('Last GPS fix: 35.6812°N, 139.7671°E, ±12 m')).toBeVisible()
   await expect(page.getByLabel('Latitude')).toHaveValue('35.681236')
   await expect(page.getByLabel('Longitude')).toHaveValue('139.767125')
+})
+
+test('OSM place search resolves detailed Indonesian locations', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('desktop'), 'Location provider integration is covered once on desktop.')
+  const elevationRequests: URL[] = []
+  await page.route('https://tiles.openfreemap.org/styles/dark', async (route) => {
+    await route.fulfill({ json: { version: 8, sources: {}, layers: [] } })
+  })
+  await page.route('https://api.open-meteo.com/v1/elevation?*', async (route) => {
+    elevationRequests.push(new URL(route.request().url()))
+    await route.fulfill({ json: { elevation: [123] } })
+  })
+  await page.route('https://photon.komoot.io/api?*', async (route) => {
+    await route.fulfill({ json: { features: [{ properties: { osm_type: 'R', osm_id: 16192960, name: 'Legok', county: 'Tangerang Regency', state: 'Banten', country: 'Indonesia' }, geometry: { coordinates: [106.5746584, -6.3024829] } }] } })
+  })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Observer location: Greenwich, London' }).click()
+  const map = page.locator('.maplibregl-canvas')
+  await expect(map).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('link', { name: 'OpenFreeMap' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'OpenMapTiles' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Interactive observer location map' }).getByRole('link', { name: 'OpenStreetMap' })).toBeVisible()
+  await map.click({ position: { x: 100, y: 100 } })
+  await expect(page.getByLabel('Elevation in metres')).toHaveValue('123')
+  expect(elevationRequests).toHaveLength(1)
+  expect(Number(elevationRequests[0].searchParams.get('latitude'))).toBeGreaterThanOrEqual(-90)
+  expect(Number(elevationRequests[0].searchParams.get('longitude'))).toBeGreaterThanOrEqual(-180)
+  await page.screenshot({ path: testInfo.outputPath('location-map.png') })
+
+  await page.getByLabel('Find a place or postcode').fill('Legok, Tangerang')
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await page.getByRole('option', { name: /Legok, Tangerang Regency/ }).click()
+  await expect(page.getByLabel('Elevation in metres')).toHaveValue('123')
+  await page.getByRole('button', { name: 'Set observer location' }).click()
+
+  await expect(page.getByRole('button', { name: 'Observer location: Legok, Tangerang Regency, Banten, Indonesia' })).toBeVisible()
+  expect(await page.evaluate(() => JSON.parse(window.localStorage.getItem('spica-location')!))).toMatchObject({
+    latitude: -6.3024829,
+    longitude: 106.5746584,
+    elevation: 123
+  })
 })
 
 test('mobile object details stay closed after selection polling', async ({ page }, testInfo) => {
