@@ -14,7 +14,20 @@ silently leaving the view unchanged.
 
 - Location- and time-correct night sky rendered by the real Stellarium Web
   Engine (WebAssembly), with independent layer toggles for constellations, deep
-  sky, Milky Way, landscape, atmosphere, and grid lines.
+  sky, Milky Way, landscape, atmosphere, and grid lines. Asterism figures
+  (Summer Triangle, Big Dipper, Southern Cross, and more) are drawn on the sky
+  on request when you center their story.
+- Field guide panel (top left): constellation, asterism, and notable-star
+  folklore stories, the observation journal, observing conditions, and the
+  device compass in one tabbed place. Selecting a bright star offers a link to
+  its story — a constellation's, a pattern's, or a famous star's own — and
+  stories can center their figure in the sky.
+- Curated folklore dataset covering about thirty constellations, the
+  well-known star patterns — Summer Triangle, Winter Triangle, Big Dipper,
+  Orion's Belt, Southern Cross, the Teapot, and the Great Square — and
+  individual showpiece stars like Albireo (β Cygni) and the "Winter Albireo"
+  double of Canis Major (Herschel 3945), told through Greek, Chinese,
+  Babylonian, Javanese and Pacific traditions.
 - Observer location picker: an interactive OpenFreeMap/MapLibre map, a
   draggable pin, browser GPS, and exact manual coordinate entry.
 - OpenStreetMap-powered place search via Photon, with an Open-Meteo fallback and
@@ -63,8 +76,9 @@ actual WebAssembly renderer rather than replacing it with a canvas mock.
 
 ## Observing Conditions
 
-Open **Observing conditions** from the cloud-and-moon button to see moon phase
-and a local estimate of sky darkness for the saved observer location. Lunar
+Open **Observing conditions** from the field guide (book button, top left) to
+see moon phase and a local estimate of sky darkness for the saved observer
+location. Lunar
 phase, illumination, altitude, azimuth, horizon status, and rise/set events are
 calculated by Stellarium Web Engine for the selected sky time and location. The
 sky-darkness estimate is derived from the Falchi et al. (2016) modeled 2015

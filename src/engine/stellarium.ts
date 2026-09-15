@@ -58,6 +58,16 @@ interface StelCore {
   }
 }
 
+export interface StellariumLayer {
+  visible: boolean
+  add(child: StellariumDrawObject): void
+  remove(child: StellariumDrawObject): void
+}
+
+export interface StellariumDrawObject {
+  update?(): void
+}
+
 export interface StellariumEngine {
   core: StelCore
   observer: StelObserver
@@ -69,6 +79,8 @@ export interface StellariumEngine {
   convertFrame(observer: StelObserver, from: string, to: string, position: unknown): unknown
   c2s(position: unknown): [number, number]
   anpm(angle: number): number
+  createLayer(options: { id?: string; z?: number; visible: boolean }): StellariumLayer
+  createObj(type: 'geojson', options: { data: unknown }): StellariumDrawObject
 }
 
 export interface SelectionInfo {
@@ -90,6 +102,26 @@ export interface MoonConditions {
   aboveHorizon: boolean
   nextRiseMjd: number | null
   nextSetMjd: number | null
+}
+
+export interface SkyDataHealth {
+  starsLoaded: boolean
+  constellationsLoaded: boolean
+}
+
+// The engine fetches catalog data with emscripten_async_wget2_data, which
+// never retries a failed request. A single dropped response therefore leaves
+// the sky without stars or constellation lines for the whole session (seen on
+// GitHub Pages and slow networks). This probe detects that state so the app
+// can offer a recovery path instead of a silently broken sky.
+export function probeSkyDataHealth(engine: StellariumEngine): SkyDataHealth {
+  // Vega: a bright, well-known star; getObjByHip loads its catalog tile on
+  // demand, so a null result means the star survey never initialized.
+  const vega = engine.getObjByHip?.(91262) ?? null
+  return {
+    starsLoaded: Boolean(vega),
+    constellationsLoaded: engine.core.skycultures.current_id === 'western'
+  }
 }
 
 type EngineFactory = (options: {
@@ -179,6 +211,19 @@ export function setLayer(engine: StellariumEngine, layer: LayerId, visible: bool
   }
 }
 
+export type LayerState = Record<LayerId, boolean>
+
+// Applies the complete layer map so the engine can never drift from the UI
+// state (e.g. after operations that touch the observer, like location changes).
+export function applyLayers(engine: StellariumEngine, layers: LayerState): void {
+  for (const layer of Object.keys(layers) as LayerId[]) {
+    setLayer(engine, layer, layers[layer])
+  }
+  // Deep-sky hints follow the deep-sky toggle so catalog markers never
+  // outlive the layer they belong to.
+  engine.core.dsos.hints_visible = layers.deepSky
+}
+
 export function clearEngineSelection(engine: StellariumEngine): void {
   // The engine wrapper treats JavaScript null as a property read. A serialized
   // zero is the native null object pointer required by TYPE_OBJ setters.
@@ -256,10 +301,6 @@ export function showTonight(engine: StellariumEngine): number {
     })
 
     engine.core.observer.utc = nightMjd
-    engine.core.atmosphere.visible = true
-    engine.core.dsos.visible = true
-    engine.core.dsos.hints_visible = true
-    engine.core.milkyway.visible = true
     return nightMjd
   } finally {
     observer.destroy()
@@ -337,7 +378,9 @@ export function getSelectionInfo(engine: StellariumEngine): SelectionInfo | null
 
   const designations = object.designations?.() ?? []
   const rawName = designations.find((value) => value.startsWith('NAME ')) ?? designations[0] ?? 'Selected object'
-  const name = rawName.replace(/^NAME /, '')
+  // Strip catalog prefixes for display: "NAME Spica" -> "Spica",
+  // "* bet01 Cyg" (Bayer/Flamsteed stars without a proper name) -> "bet01 Cyg".
+  const name = rawName.replace(/^(NAME|\*)\s+/, '')
   const radecPosition = safeInfo(object, 'radec', engine.core.observer)
   const magnitude = safeInfo(object, 'vmag', engine.core.observer)
 

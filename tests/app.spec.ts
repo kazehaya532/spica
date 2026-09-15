@@ -6,6 +6,28 @@ test('loads the real sky shell and essential controls', async ({ page }) => {
   const home = page.getByRole('link', { name: 'Spica home' })
   await expect(home).toBeVisible()
   await expect(home).toHaveAttribute('href', '/spica/')
+  // The tab icons must resolve under the deploy base (regression guard for
+  // the literal "%BASE_URL%" href that left the browser's default globe).
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute('href', /\/icons\/spica-favicon\.svg$/)
+  await expect(page.locator('link[rel="icon"][type="image/png"]')).toHaveAttribute('href', /\/icons\/spica-favicon-32\.png$/)
+  // Both formats resolve, and the PNG keeps a transparent background.
+  expect(await page.evaluate(async () => {
+    const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')]
+    const resolved = await Promise.all(links.map(async (link) => (await fetch(link.href)).ok))
+    if (!resolved.every(Boolean)) return 'unresolved'
+    const png = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/png"]')
+    if (!png) return 'missing-png-link'
+    const img = new Image()
+    img.src = png.href
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return 'no-2d-context'
+    ctx.drawImage(img, 0, 0)
+    return ctx.getImageData(0, 0, 1, 1).data[3]
+  })).toBe(0)
   await expect(page.getByRole('searchbox', { name: 'Find a sky object' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Pause time' })).toBeEnabled({ timeout: 30_000 })
   await expect(page.locator('canvas[aria-label^="Interactive night sky"]')).toBeVisible()
@@ -23,7 +45,8 @@ test('search centers a built-in planet', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Jupiter' })).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText(/horizon|Calculating/)).toBeVisible()
 
-  await page.getByRole('button', { name: 'Open observation journal' }).click()
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Journal' }).click()
   await expect(page.getByRole('button', { name: 'Add Jupiter' })).toBeVisible()
 })
 
@@ -61,6 +84,95 @@ test('offline catalog resolves named stars and a deep-sky object after loading',
     await page.getByRole('button', { name: new RegExp(result) }).click()
     await expect(page.getByRole('heading', { name: result })).toBeVisible({ timeout: 15_000 })
   }
+})
+
+test('deep-sky toggle stays off across a location change', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('desktop'), 'Layer persistence is covered once on desktop.')
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Pause time' })).toBeEnabled({ timeout: 30_000 })
+
+  await page.getByRole('button', { name: 'Hide Deep sky' }).click()
+  await expect(page.getByRole('button', { name: 'Show Deep sky' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Observer location: Greenwich, London' }).click()
+  await page.getByLabel('Latitude', { exact: true }).fill('-6.2')
+  await page.getByLabel('Longitude', { exact: true }).fill('106.8')
+  await page.getByLabel('Place name').fill('Jakarta')
+  await page.getByRole('button', { name: 'Set observer location' }).click()
+  await expect(page.getByRole('button', { name: 'Observer location: Jakarta' })).toBeVisible()
+
+  await expect(page.getByRole('button', { name: 'Show Deep sky' })).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('asterism stories draw only the centered pattern', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('desktop'), 'Asterism drawings are covered once on desktop.')
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Pause time' })).toBeEnabled({ timeout: 30_000 })
+
+  // The layer toggle is gone: patterns appear only through their story.
+  await expect(page.getByRole('button', { name: /Star patterns/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Stories' }).click()
+  await page.getByPlaceholder('Search myths, asterisms, cultures…').fill('triangle')
+  await page.getByRole('button', { name: /Summer Triangle/ }).click()
+  await expect(page.getByText('Its lines appear on the sky when you center it')).toBeVisible()
+  await page.getByRole('button', { name: 'Center in the sky' }).click()
+  await expect(page.locator('.object-panel.has-selection')).toBeVisible({ timeout: 35_000 })
+  await page.waitForTimeout(2_500) // Let the pattern drawing resolve and render.
+  await page.screenshot({ path: testInfo.outputPath('asterism-centered.png') })
+
+  // Closing the guide dismisses the pattern drawing.
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('button', { name: 'Close guide' }).click()
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeFocused()
+  await page.screenshot({ path: testInfo.outputPath('asterism-cleared.png') })
+
+  // Centering any other object clears the pattern without errors.
+  const search = page.getByRole('searchbox', { name: 'Find a sky object' })
+  await search.fill('Jupiter')
+  await page.getByRole('button', { name: /Jupiter Gas giant/ }).click()
+  await expect(page.getByRole('heading', { name: 'Jupiter' })).toBeVisible({ timeout: 10_000 })
+})
+
+test('guide stories open folklore and link from the selected star', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('desktop'), 'Guide stories are covered once on desktop.')
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeEnabled({ timeout: 30_000 })
+
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await expect(page.getByRole('heading', { name: 'Field guide' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Stories' }).click()
+  await page.getByPlaceholder('Search myths, asterisms, cultures…').fill('Orion')
+  await page.getByRole('button', { name: /Orion The celestial hunter/ }).click()
+  await expect(page.getByRole('heading', { name: 'The hunter and the scorpion' })).toBeVisible()
+  await page.getByRole('button', { name: 'Center in the sky' }).click()
+  await expect(page.locator('.object-panel.has-selection')).toBeVisible({ timeout: 15_000 })
+
+  const search = page.getByRole('searchbox', { name: 'Find a sky object' })
+  await search.fill('Spica')
+  await page.getByRole('button', { name: /Spica Brightest star in Virgo/ }).click()
+  await expect(page.getByRole('heading', { name: 'Spica' })).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: 'Read the story of Virgo' }).click()
+  await expect(page.getByRole('heading', { name: 'Virgo', exact: true })).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeFocused()
+
+  // Star stories: searchable, centerable, and linked from the selected star.
+  // The engine renders HIP 95947 under its Bayer name, so the story link
+  // (resolved by HIP) is the reliable assertion.
+  const starSearch = page.getByRole('searchbox', { name: 'Find a sky object' })
+  await starSearch.fill('Albireo')
+  await page.getByRole('button', { name: /Albireo Gold-and-blue double star/ }).click()
+  await page.getByRole('button', { name: 'Read the story of Albireo' }).click({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'One star, two colors' })).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await starSearch.fill('h3945')
+  await page.getByRole('button', { name: /Winter Albireo.*Canis Major/ }).click()
+  await page.getByRole('button', { name: 'Read the story of Winter Albireo' }).click({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'A supergiant in the Great Dog' })).toBeVisible()
 })
 
 test('mobile controls fit the viewport and location remains manual-first', async ({ page }, testInfo) => {
@@ -204,9 +316,10 @@ test('mobile compass requires calibration before device pointing', async ({ page
     Object.defineProperty(window, 'DeviceOrientationEvent', { configurable: true, value: MockDeviceOrientationEvent })
   })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Point with your phone' })).toBeEnabled({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeEnabled({ timeout: 30_000 })
 
-  await page.getByRole('button', { name: 'Point with your phone' }).click()
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Compass' }).click()
   await expect(page.getByRole('heading', { name: 'Point with your phone' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start device pointing' })).not.toBeVisible()
   await page.getByRole('button', { name: 'Allow motion access' }).click()
@@ -244,13 +357,15 @@ test('mobile compass requires calibration before device pointing', async ({ page
   await page.getByRole('button', { name: 'Increase compass adjustment by 1 degree' }).click()
   await expect(page.getByText('+1°')).toBeVisible()
   await expect(page.locator('.bearing-readout strong')).toHaveText('1°')
-  await page.getByRole('button', { name: 'Close compass panel' }).click()
-  await page.getByRole('button', { name: 'Point with your phone' }).click()
+  await page.getByRole('tab', { name: 'Journal' }).click()
+  await page.getByRole('tab', { name: 'Compass' }).click()
   await expect(page.getByText('+1°')).toBeVisible()
 
   await page.getByRole('button', { name: 'Start device pointing' }).click()
   await expect(page.getByRole('heading', { name: 'Point with your phone' })).not.toBeVisible()
-  await expect(page.getByRole('button', { name: 'Device pointing active' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Compass' }).click()
+  await expect(page.getByRole('button', { name: 'Stop device pointing' })).toBeVisible()
   expect(Number(await page.evaluate(() => window.localStorage.getItem('spica-compass-offset')))).toBeCloseTo(30, 1)
   expect(await page.evaluate(() => window.localStorage.getItem('spica-compass-fine-offset'))).toBe('1')
 })
@@ -261,9 +376,10 @@ test('mobile compass explains that LAN testing requires HTTPS', async ({ page },
     Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false })
   })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Point with your phone' })).toBeEnabled({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeEnabled({ timeout: 30_000 })
 
-  await page.getByRole('button', { name: 'Point with your phone' }).click()
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Compass' }).click()
   await page.getByRole('button', { name: 'Allow motion access' }).click()
   await expect(page.getByText('Motion sensors require HTTPS. Open Spica through its secure published URL or an HTTPS development tunnel.')).toBeVisible()
 })
@@ -275,9 +391,10 @@ test('mobile compass listens when the orientation constructor is hidden', async 
     Object.defineProperty(window, 'DeviceMotionEvent', { configurable: true, value: undefined })
   })
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Point with your phone' })).toBeEnabled({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeEnabled({ timeout: 30_000 })
 
-  await page.getByRole('button', { name: 'Point with your phone' }).click()
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Compass' }).click()
   await page.getByRole('button', { name: 'Allow motion access' }).click()
   await expect(page.getByText('Waiting', { exact: true })).toBeVisible()
   await page.evaluate(() => {
@@ -291,8 +408,9 @@ test('mobile compass listens when the orientation constructor is hidden', async 
 test('mobile journal persists entries and validates backup restore', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('mobile'), 'Journal workflow is covered in the mobile project.')
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Open observation journal' })).toBeVisible()
-  await page.getByRole('button', { name: 'Open observation journal' }).click()
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeVisible()
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Journal' }).click()
 
   await expect(page.getByRole('heading', { name: 'Observation journal' })).toBeVisible()
   await expect(page.getByText('Private by design. Every note stays in this browser.')).toBeVisible()
@@ -332,10 +450,11 @@ test('mobile journal persists entries and validates backup restore', async ({ pa
   await expect(page.getByPlaceholder(/Cloud cover/)).toHaveValue('Imported field notes.')
   await expect(page.getByText('Saturn')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Close journal' }).click()
-  await page.getByRole('button', { name: 'Open observation journal' }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Open field guide' }).click()
+  await page.getByRole('tab', { name: 'Journal' }).click()
   await expect(page.getByPlaceholder(/Cloud cover/)).toHaveValue('Imported field notes.')
   await page.keyboard.press('Escape')
   await expect(page.getByRole('heading', { name: 'Observation journal' })).not.toBeVisible()
-  await expect(page.getByRole('button', { name: 'Open observation journal' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Open field guide' })).toBeFocused()
 })

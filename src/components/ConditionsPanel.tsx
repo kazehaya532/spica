@@ -8,6 +8,7 @@ import { WeatherSummary } from './WeatherSummary'
 
 interface ConditionsPanelProps {
   open: boolean
+  embedded?: boolean
   location: ObserverLocation
   skyDate: Date
   moon: MoonConditions | null
@@ -33,7 +34,7 @@ function compassPoint(degrees: number): string {
   return points[Math.round(degrees / 45) % points.length]
 }
 
-export function ConditionsPanel({ open, location, skyDate, moon, isOnline, onChangeLocation, onClose }: ConditionsPanelProps) {
+export function ConditionsPanel({ open, embedded = false, location, skyDate, moon, isOnline, onChangeLocation, onClose }: ConditionsPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const requestRef = useRef<AbortController | null>(null)
   const [lightMap, setLightMap] = useState<LightMapState>({ status: 'idle', map: null, error: '' })
@@ -60,9 +61,9 @@ export function ConditionsPanel({ open, location, skyDate, moon, isOnline, onCha
   }
 
   useEffect(() => {
-    if (!open) return
+    if (!open || embedded) return
     window.requestAnimationFrame(() => panelRef.current?.focus())
-  }, [open])
+  }, [open, embedded])
 
   useEffect(() => {
     if (!open) return
@@ -85,7 +86,7 @@ export function ConditionsPanel({ open, location, skyDate, moon, isOnline, onCha
     >
       <div className="panel-heading">
         <div><h2 id="conditions-title">Observing conditions</h2><p>Weather, moonlight, and estimated sky darkness.</p></div>
-        <button className="icon-button" type="button" aria-label="Close observing conditions" onClick={onClose}><X /></button>
+        {!embedded && <button className="icon-button" type="button" aria-label="Close observing conditions" onClick={onClose}><X /></button>}
       </div>
 
       <div className="conditions-location">

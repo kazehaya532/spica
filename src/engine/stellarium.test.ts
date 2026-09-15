@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { centerTarget, clearEngineSelection, findNextNightMjd, getMoonConditions, type StellariumEngine } from './stellarium'
+import { applyLayers, centerTarget, clearEngineSelection, findNextNightMjd, getMoonConditions, showTonight, type StellariumEngine } from './stellarium'
 import type { SkyTarget } from '../lib/astronomy'
 
 describe('Stellarium integration helpers', () => {
@@ -26,6 +26,73 @@ describe('Stellarium integration helpers', () => {
 
     expect(core.lock).toBe(0)
     expect(core.selection).toBe(0)
+  })
+
+  it('applies every layer flag to the engine, including deep-sky hints', () => {
+    const core = {
+      constellations: { lines_visible: true, labels_visible: true },
+      atmosphere: { visible: true },
+      landscapes: { visible: true },
+      lines: { azimuthal: { visible: false }, equatorial: { visible: false } },
+      dsos: { visible: true, hints_visible: true },
+      milkyway: { visible: true }
+    }
+    const engine = { core } as unknown as StellariumEngine
+
+    applyLayers(engine, {
+      constellations: false,
+      atmosphere: false,
+      landscape: false,
+      azimuthal: true,
+      equatorial: true,
+      deepSky: false,
+      milkyWay: false
+    })
+
+    expect(core.constellations.lines_visible).toBe(false)
+    expect(core.constellations.labels_visible).toBe(false)
+    expect(core.atmosphere.visible).toBe(false)
+    expect(core.landscapes.visible).toBe(false)
+    expect(core.lines.azimuthal.visible).toBe(true)
+    expect(core.lines.equatorial.visible).toBe(true)
+    expect(core.dsos.visible).toBe(false)
+    expect(core.dsos.hints_visible).toBe(false)
+    expect(core.milkyway.visible).toBe(false)
+  })
+
+  it('showTonight moves time without resurrecting hidden layers', () => {
+    const sun = {
+      getInfo: vi.fn(() => [0, 0, 1])
+    }
+    const observer = {
+      utc: 60_000,
+      tt: 60_000.0008,
+      clone: vi.fn(() => ({ utc: 60_000, tt: 60_000.0008, destroy: vi.fn() })),
+      destroy: vi.fn()
+    }
+    const core = {
+      observer,
+      atmosphere: { visible: false },
+      dsos: { visible: false, hints_visible: false },
+      milkyway: { visible: false }
+    }
+    const engine = {
+      D2R: Math.PI / 180,
+      core,
+      getObj: vi.fn(() => sun),
+      convertFrame: vi.fn(() => [0, 0, -1]),
+      c2s: vi.fn(() => [0, -0.4]),
+      anpm: vi.fn((angle: number) => angle)
+    } as unknown as StellariumEngine
+
+    const night = showTonight(engine)
+
+    expect(night).toBe(60_000)
+    expect(core.observer.utc).toBe(60_000)
+    expect(core.atmosphere.visible).toBe(false)
+    expect(core.dsos.visible).toBe(false)
+    expect(core.dsos.hints_visible).toBe(false)
+    expect(core.milkyway.visible).toBe(false)
   })
 
   it('retries catalog lookup while asynchronous tiles load', async () => {

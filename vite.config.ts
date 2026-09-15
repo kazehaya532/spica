@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/spica.svg'],
+        includeAssets: ['icons/spica.svg', 'icons/spica-favicon.svg', 'icons/spica-favicon-32.png'],
       manifest: {
         name: 'Spica',
         short_name: 'Spica',

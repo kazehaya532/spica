@@ -36,6 +36,8 @@ export const SKY_TARGETS: SkyTarget[] = [
   { name: 'Deneb', subtitle: 'Luminous supergiant in Cygnus', kind: 'Star', aliases: ['HIP 102098', 'NAME Deneb'] },
   { name: 'Regulus', subtitle: 'Brightest star in Leo', kind: 'Star', aliases: ['HIP 49669', 'NAME Regulus'] },
   { name: 'Polaris', subtitle: 'The North Star', kind: 'Star', aliases: ['HIP 11767', 'NAME Polaris'] },
+  { name: 'Albireo', subtitle: 'Gold-and-blue double star in Cygnus', kind: 'Star', aliases: ['HIP 95947', 'NAME Albireo'], searchTerms: ['beta cygni'] },
+  { name: 'Winter Albireo', subtitle: 'The gold-and-blue double of Canis Major (h3945)', kind: 'Star', aliases: ['HIP 35210'], searchTerms: ['h3945', 'herschel 3945', 'winter albireo', '145 cma'] },
   { name: 'Andromeda Galaxy', subtitle: 'Nearest large galaxy', kind: 'Deep sky', aliases: ['M 31', 'M31', 'NAME Andromeda Galaxy'] },
   { name: 'Orion Nebula', subtitle: 'Stellar nursery in Orion', kind: 'Deep sky', aliases: ['M 42', 'M42', 'NAME Orion Nebula'] },
   { name: 'Pleiades', subtitle: 'Open star cluster in Taurus', kind: 'Deep sky', aliases: ['M 45', 'M45', 'NAME Pleiades'] }

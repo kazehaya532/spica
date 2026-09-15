@@ -14,6 +14,7 @@ import {
 
 interface JournalPanelProps {
   open: boolean
+  embedded?: boolean
   selectedObject: string | null
   onClose: () => void
 }
@@ -24,7 +25,7 @@ function dateFromKey(key: string): Date {
   return new Date(`${key}T12:00:00`)
 }
 
-export function JournalPanel({ open, selectedObject, onClose }: JournalPanelProps) {
+export function JournalPanel({ open, embedded = false, selectedObject, onClose }: JournalPanelProps) {
   const [today, setToday] = useState(() => new Date())
   const todayKey = getLocalDateKey(today)
   const [journal, setJournal] = useState<JournalStore>(() => loadJournal(window.localStorage))
@@ -46,13 +47,13 @@ export function JournalPanel({ open, selectedObject, onClose }: JournalPanelProp
       setEntryDate(getLocalDateKey(nextToday))
     }
     refreshToday()
-    window.requestAnimationFrame(() => panelRef.current?.focus())
+    if (!embedded) window.requestAnimationFrame(() => panelRef.current?.focus())
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') refreshToday()
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [open])
+  }, [open, embedded])
 
   const persistJournal = (next: JournalStore, successMessage: string): boolean => {
     try {
@@ -127,10 +128,8 @@ export function JournalPanel({ open, selectedObject, onClose }: JournalPanelProp
     persistJournal({ version: 1, entries }, 'Entry deleted')
   }
 
-  if (!open) return null
-
   return (
-    <aside ref={panelRef} className="journal-panel" id="journal-panel" aria-labelledby="journal-title" tabIndex={-1} onKeyDown={(event) => {
+    <aside ref={panelRef} className="journal-panel" id="journal-panel" aria-labelledby="journal-title" tabIndex={-1} hidden={!open} onKeyDown={(event) => {
       if (event.key === 'Escape') onClose()
     }}>
       <div className="journal-heading">
@@ -138,7 +137,7 @@ export function JournalPanel({ open, selectedObject, onClose }: JournalPanelProp
           <h2 id="journal-title">Observation journal</h2>
           <p>Private by design. Every note stays in this browser.</p>
         </div>
-        <button className="icon-button" type="button" aria-label="Close journal" onClick={onClose}><X /></button>
+        {!embedded && <button className="icon-button" type="button" aria-label="Close journal" onClick={onClose}><X /></button>}
       </div>
 
       <div className="journal-date-row">

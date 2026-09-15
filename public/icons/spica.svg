@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Spica">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Spica">
   <rect width="512" height="512" rx="112" fill="#080b12"/>
   <g fill="#efb26b" transform="translate(0 2)">
     <path d="M232 232c-48-24-120-80-144-160 88 8 152 72 176 160h-32z"/>

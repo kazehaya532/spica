@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Asterisk,
-  BookOpen,
+  BookMarked,
   CircleHelp,
-  CloudMoon,
   CloudSun,
-  Compass,
   Crosshair,
   Eye,
   Flashlight,
@@ -26,25 +24,28 @@ import {
   Waves,
   X
 } from 'lucide-react'
-import { CompassPanel } from './components/CompassPanel'
-import { ConditionsPanel } from './components/ConditionsPanel'
-import { JournalPanel } from './components/JournalPanel'
+import { clearAsterismDrawing, showAsterismDrawing } from './engine/asterisms'
+import { GuidePanel, type GuideTab } from './components/GuidePanel'
 import { LocationPanel } from './components/LocationPanel'
 import {
+  applyLayers,
   centerTarget,
   clearEngineSelection,
   createStellarium,
   getSelectionInfo,
   getMoonConditions,
+  probeSkyDataHealth,
   setLayer,
   showTonight,
   type LayerId,
+  type LayerState,
   type MoonConditions,
   type SelectionInfo,
   type StellariumEngine
 } from './engine/stellarium'
 import { dateToMjd, mjdToDate, SKY_TARGETS, toDateTimeInput, type SkyTarget } from './lib/astronomy'
 import { fetchTerrainElevation, formatObserverCoordinates, type ObserverLocation } from './lib/location'
+import { ASTERISM_STORIES, findStoryForSelection, type SkyStory } from './lib/stories'
 
 type EngineStatus = 'loading' | 'ready' | 'error'
 
@@ -56,7 +57,7 @@ const DEFAULT_LOCATION: ObserverLocation = {
   timezone: 'Europe/London'
 }
 
-const INITIAL_LAYERS: Record<LayerId, boolean> = {
+const INITIAL_LAYERS: LayerState = {
   constellations: true,
   atmosphere: true,
   landscape: true,
@@ -80,6 +81,11 @@ const LAYER_CONTROLS: Array<{
   { id: 'milkyWay', label: 'Milky Way', icon: Waves }
 ]
 
+const ASTERISM_DRAWINGS = new Map(ASTERISM_STORIES.map((story) => [
+  story.id,
+  { id: story.id, name: story.name, segments: story.lineSegments }
+]))
+
 function getStoredLocation(): ObserverLocation {
   try {
     const value = window.localStorage.getItem('spica-location')
@@ -92,9 +98,7 @@ function getStoredLocation(): ObserverLocation {
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<StellariumEngine | null>(null)
-  const compassButtonRef = useRef<HTMLButtonElement>(null)
-  const conditionsButtonRef = useRef<HTMLButtonElement>(null)
-  const journalButtonRef = useRef<HTMLButtonElement>(null)
+  const guideButtonRef = useRef<HTMLButtonElement>(null)
   const locationButtonRef = useRef<HTMLButtonElement>(null)
   const locationRef = useRef<ObserverLocation>(getStoredLocation())
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('loading')
@@ -105,6 +109,7 @@ function App() {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState('')
   const [layers, setLayers] = useState(INITIAL_LAYERS)
+  const layersRef = useRef(INITIAL_LAYERS)
   const [skyDate, setSkyDate] = useState(new Date())
   const [speed, setSpeed] = useState(1)
   const lastSpeedRef = useRef(1)
@@ -114,28 +119,31 @@ function App() {
   const [searchMessage, setSearchMessage] = useState('')
   const [searching, setSearching] = useState(false)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [skyDataDegraded, setSkyDataDegraded] = useState(false)
   const [redMode, setRedMode] = useState(() => window.localStorage.getItem('spica-red-mode') === 'true')
   const [nightSky, setNightSky] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [compassOpen, setCompassOpen] = useState(false)
-  const [conditionsOpen, setConditionsOpen] = useState(false)
-  const [moonConditions, setMoonConditions] = useState<MoonConditions | null>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
+  const [guideTab, setGuideTab] = useState<GuideTab>('stories')
+  const [focusStoryId, setFocusStoryId] = useState<string | null>(null)
   const [compassActive, setCompassActive] = useState(false)
-  const [journalOpen, setJournalOpen] = useState(false)
+  const [moonConditions, setMoonConditions] = useState<MoonConditions | null>(null)
 
-  const closeCompassPanel = () => {
-    setCompassOpen(false)
-    window.requestAnimationFrame(() => compassButtonRef.current?.focus())
+  const closeGuidePanel = () => {
+    setGuideOpen(false)
+    setFocusStoryId(null)
+    // Closing the guide dismisses the on-request pattern drawing; centering a
+    // story still shows it because the drawing is created after this runs.
+    if (engineRef.current) clearAsterismDrawing(engineRef.current)
+    window.requestAnimationFrame(() => guideButtonRef.current?.focus())
   }
 
-  const closeConditionsPanel = () => {
-    setConditionsOpen(false)
-    window.requestAnimationFrame(() => conditionsButtonRef.current?.focus())
-  }
-
-  const closeJournalPanel = () => {
-    setJournalOpen(false)
-    window.requestAnimationFrame(() => journalButtonRef.current?.focus())
+  const openGuide = (tab: GuideTab, storyId?: string) => {
+    setGuideTab(tab)
+    setFocusStoryId(storyId ?? null)
+    setGuideOpen(true)
+    setLocationOpen(false)
+    setHelpOpen(false)
   }
 
   const closeLocationPanel = () => {
@@ -157,6 +165,7 @@ function App() {
       engine.core.observer.latitude = currentLocation.latitude * engine.D2R
       engine.core.observer.longitude = currentLocation.longitude * engine.D2R
       engine.core.observer.elevation = currentLocation.elevation
+      applyLayers(engine, layersRef.current)
       const nightMjd = showTonight(engine)
       setSkyDate(mjdToDate(nightMjd))
       setNightSky(true)
@@ -179,14 +188,41 @@ function App() {
   }, [])
 
   const moonMinute = Math.floor(skyDate.getTime() / 60_000)
+  const conditionsActive = guideOpen && guideTab === 'conditions'
   useEffect(() => {
-    if (!conditionsOpen || engineStatus !== 'ready' || !engineRef.current) return
+    if (!conditionsActive || engineStatus !== 'ready' || !engineRef.current) return
     setMoonConditions(getMoonConditions(engineRef.current))
-  }, [conditionsOpen, engineStatus, moonMinute, location.latitude, location.longitude, location.elevation])
+  }, [conditionsActive, engineStatus, moonMinute, location.latitude, location.longitude, location.elevation])
 
   useEffect(() => {
     window.localStorage.setItem('spica-red-mode', String(redMode))
   }, [redMode])
+
+  // Detect the engine's unrecoverable catalog-fetch failures (stars or
+  // constellation data missing) and surface a one-tap recovery. The engine
+  // never retries failed requests, so a reload is the only cure.
+  useEffect(() => {
+    if (engineStatus !== 'ready' || !isOnline) return
+    let attempt = 0
+    let timer = 0
+    const probe = () => {
+      const engine = engineRef.current
+      if (!engine) return
+      const health = probeSkyDataHealth(engine)
+      if (health.starsLoaded && health.constellationsLoaded) {
+        setSkyDataDegraded(false)
+        return
+      }
+      attempt += 1
+      if (attempt >= 3) {
+        setSkyDataDegraded(true)
+        return
+      }
+      timer = window.setTimeout(probe, 15_000)
+    }
+    timer = window.setTimeout(probe, 15_000)
+    return () => window.clearTimeout(timer)
+  }, [engineStatus, isOnline])
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -205,6 +241,11 @@ function App() {
     return `${target.name} ${target.subtitle} ${target.kind} ${target.aliases.join(' ')} ${target.searchTerms?.join(' ') ?? ''}`.toLowerCase().includes(normalizedQuery)
   }).slice(0, 6)
 
+  const selectionStory = useMemo(
+    () => (selection ? findStoryForSelection(selection.designation, selection.name) ?? null : null),
+    [selection]
+  )
+
   const updateLocation = (nextLocation: ObserverLocation) => {
     locationRef.current = nextLocation
     setLocation(nextLocation)
@@ -218,6 +259,9 @@ function App() {
         const nightMjd = showTonight(engine)
         setSkyDate(mjdToDate(nightMjd))
       }
+      // showTonight no longer forces any layer, so re-assert the toggles the
+      // user actually chose; otherwise the engine would resurrect layers.
+      applyLayers(engine, layersRef.current)
     }
     setLocationOpen(false)
     setLocationError('')
@@ -269,6 +313,7 @@ function App() {
     const engine = engineRef.current
     if (!engine) return
     setCompassActive(false)
+    clearAsterismDrawing(engine)
     const requestId = ++searchRequestRef.current
     setQuery(target.name)
     setSearchOpen(false)
@@ -292,12 +337,49 @@ function App() {
     else setSearchMessage(`No essential-catalog result for “${query}”.`)
   }
 
+  const centerStory = async (story: SkyStory) => {
+    const engine = engineRef.current
+    if (!engine) return
+    const requestId = ++searchRequestRef.current
+    closeGuidePanel()
+    setSearching(true)
+    setSearchMessage(`Centering ${story.name}…`)
+    // Constellations already draw via their own layer; only asterism stories
+    // get the on-request pattern drawing, and every other view clears it so
+    // the sky shows exactly what the reader asked for.
+    if (story.kind !== 'asterism') clearAsterismDrawing(engine)
+    // Star tiles are all requested at startup, but on slow connections the
+    // fetch queue can drain for many seconds; keep waiting while the toast
+    // shows progress instead of declaring the sky unframeable too early.
+    const found = await centerTarget(engine, {
+      name: story.name,
+      subtitle: story.tagline,
+      kind: 'Star',
+      aliases: story.centerAliases
+    }, { timeoutMs: 30_000 })
+    if (story.kind === 'asterism') {
+      const drawing = ASTERISM_DRAWINGS.get(story.id)
+      if (drawing) void showAsterismDrawing(engine, drawing).catch(() => undefined)
+    }
+    if (requestId !== searchRequestRef.current) return
+    setSearching(false)
+    if (!found) {
+      setSearchMessage(`${story.name} could not be framed in the sky right now.`)
+      return
+    }
+    setSearchMessage('')
+    window.setTimeout(() => setSelection(getSelectionInfo(engine)), 750)
+  }
+
   const toggleLayer = (layer: LayerId) => {
     const engine = engineRef.current
     if (!engine) return
     const visible = !layers[layer]
+    const next = { ...layersRef.current, [layer]: visible }
     setLayer(engine, layer, visible)
-    setLayers((current) => ({ ...current, [layer]: visible }))
+    if (layer === 'deepSky') engine.core.dsos.hints_visible = visible
+    layersRef.current = next
+    setLayers(next)
   }
 
   const setDate = (date: Date) => {
@@ -366,12 +448,17 @@ function App() {
       }
       setSearchMessage(`Jumped to ${formattedTime}, the start of astronomical darkness at ${location.label}.`)
     }
-    setLayers((current) => ({
-      ...current,
+    // Preserve the "Tonight resets to the full view" behavior, but apply it to
+    // the engine and React state together so the toggles can never desync.
+    const nextLayers: LayerState = {
+      ...layersRef.current,
       atmosphere: true,
       deepSky: true,
       milkyWay: true
-    }))
+    }
+    if (engineRef.current) applyLayers(engineRef.current, nextLayers)
+    layersRef.current = nextLayers
+    setLayers(nextLayers)
   }
 
   const clearSelection = () => {
@@ -391,12 +478,30 @@ function App() {
       <div className={`red-light-overlay ${redMode ? 'is-active' : ''}`} aria-hidden="true" />
 
       <header className="top-bar">
-        <a className="brand" href={import.meta.env.BASE_URL} aria-label="Spica home">
-          <span className="brand-mark" aria-hidden="true">
-            <img src={`${import.meta.env.BASE_URL}icons/spica-mark.svg`} alt="" />
-          </span>
-          <span>Spica</span>
-        </a>
+        <div className="top-left">
+          <button
+            ref={guideButtonRef}
+            className="icon-button guide-button"
+            type="button"
+            aria-label="Open field guide"
+            aria-expanded={guideOpen}
+            aria-controls="guide-panel"
+            title="Field guide: stories, journal, conditions, compass"
+            disabled={engineStatus !== 'ready'}
+            onClick={() => {
+              if (guideOpen) closeGuidePanel()
+              else openGuide(guideTab)
+            }}
+          >
+            <BookMarked />
+          </button>
+          <a className="brand" href={import.meta.env.BASE_URL} aria-label="Spica home">
+            <span className="brand-mark" aria-hidden="true">
+              <img src={`${import.meta.env.BASE_URL}icons/spica-mark.svg`} alt="" />
+            </span>
+            <span>Spica</span>
+          </a>
+        </div>
 
         <form className="search-box" role="search" onSubmit={submitSearch}>
           <Search aria-hidden="true" />
@@ -449,70 +554,12 @@ function App() {
             aria-expanded={locationOpen}
             onClick={() => {
               setLocationOpen((open) => !open)
-              setConditionsOpen(false)
-              setCompassOpen(false)
-              setJournalOpen(false)
+              setGuideOpen(false)
               setHelpOpen(false)
             }}
           >
             <MapPin aria-hidden="true" />
             <span><strong>{location.label}</strong><small>{formatObserverCoordinates(location)}</small></span>
-          </button>
-          <button
-            ref={conditionsButtonRef}
-            className="icon-button"
-            type="button"
-            aria-label="Open observing conditions"
-            aria-expanded={conditionsOpen}
-            aria-controls="conditions-panel"
-            title="Observing conditions"
-            onClick={() => {
-              setConditionsOpen((open) => !open)
-              setLocationOpen(false)
-              setCompassOpen(false)
-              setJournalOpen(false)
-              setHelpOpen(false)
-            }}
-          >
-            <CloudMoon />
-          </button>
-          <button
-            ref={compassButtonRef}
-            className="icon-button"
-            type="button"
-            aria-label={compassActive ? 'Device pointing active' : 'Point with your phone'}
-            aria-pressed={compassActive}
-            aria-expanded={compassOpen}
-            aria-controls="compass-panel"
-            title="Device compass"
-            disabled={engineStatus !== 'ready'}
-            onClick={() => {
-              setCompassOpen((open) => !open)
-              setLocationOpen(false)
-              setConditionsOpen(false)
-              setJournalOpen(false)
-              setHelpOpen(false)
-            }}
-          >
-            <Compass />
-          </button>
-          <button
-            ref={journalButtonRef}
-            className="icon-button"
-            type="button"
-            aria-label="Open observation journal"
-            aria-expanded={journalOpen}
-            aria-controls="journal-panel"
-            title="Observation journal"
-            onClick={() => {
-              setJournalOpen((open) => !open)
-              setLocationOpen(false)
-              setConditionsOpen(false)
-              setCompassOpen(false)
-              setHelpOpen(false)
-            }}
-          >
-            <BookOpen />
           </button>
           <button
             className="icon-button"
@@ -534,9 +581,7 @@ function App() {
           <button className="icon-button desktop-action" type="button" aria-label="Show controls help" aria-expanded={helpOpen} onClick={() => {
             setHelpOpen((open) => !open)
             setLocationOpen(false)
-            setConditionsOpen(false)
-            setCompassOpen(false)
-            setJournalOpen(false)
+            setGuideOpen(false)
           }}>
             <CircleHelp />
           </button>
@@ -544,6 +589,15 @@ function App() {
       </header>
 
       {searchMessage && <p className="toast" role="status">{searchMessage}</p>}
+
+      {skyDataDegraded && (
+        <p className="toast data-toast" role="alert">
+          Some sky data failed to load, so stars or constellations may be missing.
+          <button className="text-action" type="button" onClick={() => window.location.reload()}>
+            <RotateCcw /> Reload sky data
+          </button>
+        </p>
+      )}
 
       <LocationPanel
         open={locationOpen}
@@ -571,32 +625,29 @@ function App() {
         </aside>
       )}
 
-      <CompassPanel
-        open={compassOpen}
-        active={compassActive}
-        getEngine={() => engineRef.current}
-        onActiveChange={setCompassActive}
-        onClose={closeCompassPanel}
-        onStartPointing={clearSelection}
-      />
-
-      <ConditionsPanel
-        open={conditionsOpen}
+      <GuidePanel
+        open={guideOpen}
+        tab={guideTab}
+        onTabChange={(tab) => {
+          setGuideTab(tab)
+          setFocusStoryId(null)
+        }}
+        onClose={closeGuidePanel}
         location={location}
         skyDate={skyDate}
         moon={moonConditions}
         isOnline={isOnline}
-        onClose={closeConditionsPanel}
-         onChangeLocation={() => {
-           setConditionsOpen(false)
-           setLocationOpen(true)
-         }}
-      />
-
-      <JournalPanel
-        open={journalOpen}
         selectedObject={selection?.name ?? null}
-        onClose={closeJournalPanel}
+        getEngine={() => engineRef.current}
+        compassActive={compassActive}
+        onCompassActiveChange={setCompassActive}
+        onStartPointing={clearSelection}
+        onChangeLocation={() => {
+          setGuideOpen(false)
+          setLocationOpen(true)
+        }}
+        onCenterStory={centerStory}
+        focusStoryId={focusStoryId}
       />
 
       <aside className={`object-panel ${selection ? 'has-selection' : ''}`} aria-live="polite">
@@ -614,6 +665,11 @@ function App() {
               <div><dt>Azimuth</dt><dd>{selection.azimuth}</dd></div>
               <div><dt>Altitude</dt><dd>{selection.altitude}</dd></div>
             </dl>
+            {selectionStory && (
+              <button className="text-action story-link" type="button" onClick={() => openGuide('stories', selectionStory.id)}>
+                <BookMarked /> Read the story of {selectionStory.name}
+              </button>
+            )}
           </>
         ) : (
           <div className="welcome-copy">

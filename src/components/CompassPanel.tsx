@@ -27,6 +27,7 @@ interface DeviceOrientationWithCompass extends DeviceOrientationEvent {
 
 interface CompassPanelProps {
   open: boolean
+  embedded?: boolean
   active: boolean
   getEngine: () => StellariumEngine | null
   onActiveChange: (active: boolean) => void
@@ -45,7 +46,7 @@ function getStoredNumber(key: string): number | null {
   }
 }
 
-export function CompassPanel({ open, active, getEngine, onActiveChange, onClose, onStartPointing }: CompassPanelProps) {
+export function CompassPanel({ open, embedded = false, active, getEngine, onActiveChange, onClose, onStartPointing }: CompassPanelProps) {
   const [permissionReady, setPermissionReady] = useState(false)
   const [reading, setReading] = useState<OrientationReading | null>(null)
   const [offset, setOffset] = useState<number | null>(() => getStoredNumber(COMPASS_OFFSET_KEY))
@@ -63,9 +64,9 @@ export function CompassPanel({ open, active, getEngine, onActiveChange, onClose,
   }, [getEngine])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || embedded) return
     window.requestAnimationFrame(() => panelRef.current?.focus())
-  }, [open])
+  }, [open, embedded])
 
   useEffect(() => {
     if (!permissionReady || (!open && !active)) return
@@ -204,8 +205,6 @@ export function CompassPanel({ open, active, getEngine, onActiveChange, onClose,
     }
   }
 
-  if (!open) return null
-
   const calibratedHeading = reading && offset !== null ? applyCompassOffset(reading.heading, offset + fineOffset) : null
   const isFlat = Boolean(reading && Math.abs(reading.altitude) <= 20)
   const canCalibrate = Boolean(reading?.absolute && isFlat && calibrationQuality?.stable)
@@ -226,7 +225,7 @@ export function CompassPanel({ open, active, getEngine, onActiveChange, onClose,
           : { tone: '', label: 'Collecting steady readings' }
 
   return (
-    <aside ref={panelRef} className="compass-panel" id="compass-panel" aria-labelledby="compass-title" tabIndex={-1} onKeyDown={(event) => {
+    <aside ref={panelRef} className="compass-panel" id="compass-panel" aria-labelledby="compass-title" tabIndex={-1} hidden={!open} onKeyDown={(event) => {
       if (event.key === 'Escape') onClose()
     }}>
       <div className="panel-heading">
@@ -234,7 +233,7 @@ export function CompassPanel({ open, active, getEngine, onActiveChange, onClose,
           <h2 id="compass-title">Point with your phone</h2>
           <p>Calibrate north before the sky follows your device.</p>
         </div>
-        <button className="icon-button" type="button" aria-label="Close compass panel" onClick={onClose}><X /></button>
+        {!embedded && <button className="icon-button" type="button" aria-label="Close compass panel" onClick={onClose}><X /></button>}
       </div>
 
       {!permissionReady ? (
